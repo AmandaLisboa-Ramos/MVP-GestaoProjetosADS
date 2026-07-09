@@ -1,368 +1,162 @@
-import { useState, useEffect } from "react"
-import { useNavigate } from "react-router-dom"
-import { ArrowLeft, User, Mail, ShieldCheck, UserPlus, Lock, LayoutGrid } from "lucide-react"
-import { Button } from "../components/ui/button"
+import { useState, useEffect, useCallback } from "react"
+import { ShieldCheck, User, Users } from "lucide-react"
 import api from "../services/api"
-import { useAuth } from "../context/AuthContext"
+
+// Componentes de perfil
+import MeusDadosCard from "../components/perfil/MeusDadosCard"
+import AlterarSenhaCard from "../components/perfil/AlterarSenhaCard"
+import ProfessoresListCard from "../components/perfil/ProfessoresListCard"
+import NovoProfessorCard from "../components/perfil/NovoProfessorCard"
+import Toast from "../components/perfil/Toast"
+
+
+function TabButton({ active, icon: Icon, label, onClick }) {
+    return (
+        <button
+            onClick={onClick}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200
+                ${active
+                    ? "bg-[#1a7a5e] text-white shadow-md"
+                    : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
+                }`}
+        >
+            <Icon size={16} />
+            {label}
+        </button>
+    )
+}
+
 
 function Perfil() {
-    const navigate = useNavigate()
-    const { logout } = useAuth()
-
-    // Estados do usuário atual
+    const [activeTab, setActiveTab] = useState("perfil")
     const [currentUser, setCurrentUser] = useState(null)
     const [loadingUser, setLoadingUser] = useState(true)
     const [errorUser, setErrorUser] = useState("")
+    const [professores, setProfessores] = useState([])
+    const [loadingProfs, setLoadingProfs] = useState(false)
+    const [professoresLoaded, setProfessoresLoaded] = useState(false)
+    const [toast, setToast] = useState({ message: "", type: "success" })
 
-    // Estados do formulário de novo admin
-    const [newAdmin, setNewAdmin] = useState({ username: "", email: "", password: "" })
-    const [loadingForm, setLoadingForm] = useState(false)
-    const [successForm, setSuccessForm] = useState("")
-    const [errorForm, setErrorForm] = useState("")
-
-    // Estados do formulário de alterar senha
-    const [pwdData, setPwdData] = useState({ senha_atual: "", nova_senha: "" })
-    const [loadingPwd, setLoadingPwd] = useState(false)
-    const [successPwd, setSuccessPwd] = useState("")
-    const [errorPwd, setErrorPwd] = useState("")
-
-    useEffect(() => {
-        const fetchUser = async () => {
-            try {
-                const response = await api.get('auth/me/');
-                let userData = response.data;
-                if (userData && userData.data && typeof userData.data === 'object' && !Array.isArray(userData.data)) {
-                    userData = userData.data;
-                } else if (userData && userData.user && typeof userData.user === 'object') {
-                    userData = userData.user;
-                }
-
-                if (Array.isArray(userData) && userData.length > 0) {
-                    userData = userData[0];
-                } else if (userData && userData.results && Array.isArray(userData.results) && userData.results.length > 0) {
-                    userData = userData.results[0];
-                }
-
-                const username = userData.username || localStorage.getItem('logged_username') || "Usuário";
-                const email = userData.email || localStorage.getItem('email') || "";
-
-                setCurrentUser({ username, email });
-            } catch (error) {
-                console.error("Erro ao buscar perfil", error);
-                const username = localStorage.getItem('logged_username');
-                const email = localStorage.getItem('email');
-                if (username) {
-                    setCurrentUser({ username, email });
-                } else {
-                    setErrorUser("Não foi possível carregar os dados do perfil.");
-                }
-            } finally {
-                setLoadingUser(false);
-            }
-        };
-        fetchUser();
+    const showToast = useCallback((message, type = "success") => {
+        setToast({ message, type })
     }, [])
 
+    const clearToast = useCallback(() => {
+        setToast({ message: "", type: "success" })
+    }, [])
 
-    const handleInputChange = (e) => {
-        const { name, value } = e.target
-        setNewAdmin(prev => ({ ...prev, [name]: value }))
-    }
-
-    const handlePwdChange = (e) => {
-        const { name, value } = e.target
-        setPwdData(prev => ({ ...prev, [name]: value }))
-    }
-
-    const handleRegisterAdmin = async (e) => {
-        e.preventDefault()
-        setLoadingForm(true)
-        setSuccessForm("")
-        setErrorForm("")
-
-        try {
-            await api.post('auth/register/', newAdmin)
-            setSuccessForm(`Usuário ${newAdmin.username} cadastrado com sucesso!`)
-            setNewAdmin({ username: "", email: "", password: "" })
-        } catch (err) {
-            console.error(err)
-            const errorMsg = err.response?.data?.username?.[0] ||
-                err.response?.data?.email?.[0] ||
-                err.response?.data?.password?.[0] ||
-                "Ocorreu um erro ao registrar o usuário."
-            setErrorForm(errorMsg)
-        } finally {
-            setLoadingForm(false)
+    useEffect(() => {
+        const fetchMe = async () => {
+            try {
+                const res = await api.get("auth/me/")
+                const userData = res.data?.data ?? res.data
+                setCurrentUser(userData)
+            } catch {
+                setErrorUser("Não foi possível carregar os dados do perfil.")
+            } finally {
+                setLoadingUser(false)
+            }
         }
+        fetchMe()
+    }, [])
+
+    const fetchProfessores = useCallback(async () => {
+        setLoadingProfs(true)
+        try {
+            const res = await api.get("auth/users/")
+            const data = res.data?.results ?? res.data
+            setProfessores(Array.isArray(data) ? data : [])
+        } catch {
+            setProfessores([])
+        } finally {
+            setLoadingProfs(false)
+        }
+    }, [])
+
+    useEffect(() => {
+        if (activeTab === "professores" && !professoresLoaded) {
+            setProfessoresLoaded(true)
+            fetchProfessores()
+        }
+    }, [activeTab, professoresLoaded, fetchProfessores])
+
+    const handleProfRemoved = () => {
+        fetchProfessores()
+        showToast("Professor removido com sucesso!")
     }
 
-    const handleChangePassword = async (e) => {
-        e.preventDefault()
-        setLoadingPwd(true)
-        setSuccessPwd("")
-        setErrorPwd("")
-
-        try {
-            await api.patch('auth/change-password/', pwdData)
-            setSuccessPwd("Senha alterada com sucesso!")
-            setPwdData({ senha_atual: "", nova_senha: "" })
-        } catch (err) {
-            console.error(err)
-            const errorMsg = err.response?.data?.senha_atual?.[0] ||
-                err.response?.data?.nova_senha?.[0] ||
-                err.response?.data?.detail ||
-                "Ocorreu um erro ao alterar a senha. Verifique sua senha atual."
-            setErrorPwd(errorMsg)
-        } finally {
-            setLoadingPwd(false)
-        }
+    const handleProfCreated = () => {
+        fetchProfessores()
     }
 
     return (
-        <section className="min-h-screen bg-gray-50 flex flex-col">
-            {/* Header */}
-            <div className="mb-8">
-                <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                    <ShieldCheck size={28} className="text-[#006b64]" />
+        <section className="min-h-screen">
+            {/* Toast global */}
+            <Toast message={toast.message} type={toast.type} onClose={clearToast} />
+
+            {/* Page Header */}
+            <div className="mb-6">
+                <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2 m-0">
+                    <ShieldCheck size={26} className="text-[#1a7a5e]" />
                     Perfil e Administração
                 </h1>
-                <p className="text-gray-500 text-sm">Gerencie seus dados e cadastre novos administradores.</p>
+                <p className="text-gray-500 text-sm mt-1">
+                    Gerencie seus dados e os professores com acesso ao sistema.
+                </p>
             </div>
 
-            <main className="flex-1 w-full grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Tab Bar */}
+            <div className="flex items-center gap-3 mb-6">
+                <TabButton
+                    active={activeTab === "perfil"}
+                    icon={User}
+                    label="Meu Perfil"
+                    onClick={() => setActiveTab("perfil")}
+                />
+                <TabButton
+                    active={activeTab === "professores"}
+                    icon={Users}
+                    label="Professores"
+                    onClick={() => setActiveTab("professores")}
+                />
+            </div>
 
-                {/* Coluna 1: Dados do Usuário e Alterar Senha */}
-                <div className="flex flex-col gap-8">
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 h-fit">
-                        <div className="flex items-center gap-3 border-b border-gray-100 pb-4 mb-6">
-                            <div className="bg-[#006b64]/10 p-3 rounded-full text-[#006b64]">
-                                <User size={24} />
-                            </div>
-                            <div>
-                                <h2 className="text-xl font-bold text-gray-800">Meus Dados</h2>
-                                <p className="text-sm text-gray-500">Informações do seu perfil atual</p>
-                            </div>
-                        </div>
-
-                        {loadingUser ? (
-                            <div className="animate-pulse space-y-4">
-                                <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                                <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-                            </div>
-                        ) : errorUser ? (
-                            <p className="text-red-500 text-sm">{errorUser}</p>
-                        ) : currentUser ? (
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                                        Nome de Usuário
-                                    </label>
-                                    <div className="flex items-center gap-2 text-gray-800 font-medium bg-gray-50 p-3 rounded-lg border border-gray-200">
-                                        <User size={16} className="text-gray-400" />
-                                        {currentUser.username}
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                                        E-mail
-                                    </label>
-                                    <div className="flex items-center gap-2 text-gray-800 font-medium bg-gray-50 p-3 rounded-lg border border-gray-200">
-                                        <Mail size={16} className="text-gray-400" />
-                                        {currentUser.email || "Não informado"}
-                                    </div>
-                                </div>
-
-                                <div className="pt-4 border-t border-gray-100">
-                                    <Button
-                                        onClick={logout}
-                                        variant="outline"
-                                        className="w-full text-red-600 border-red-200 hover:bg-red-50"
-                                    >
-                                        Sair da conta
-                                    </Button>
-                                </div>
-                            </div>
-                        ) : null}
-                    </div>
-
-                    {/* Alterar Senha */}
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                        <div className="flex items-center gap-3 border-b border-gray-100 pb-4 mb-6">
-                            <div className="bg-[#006b64]/10 p-3 rounded-full text-[#006b64]">
-                                <Lock size={24} />
-                            </div>
-                            <div>
-                                <h2 className="text-xl font-bold text-gray-800">Alterar Senha</h2>
-                                <p className="text-sm text-gray-500">Atualize sua senha de acesso</p>
-                            </div>
-                        </div>
-
-                        {successPwd && (
-                            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg mb-6 text-sm flex items-center gap-2">
-                                <ShieldCheck size={18} />
-                                {successPwd}
-                            </div>
-                        )}
-
-                        {errorPwd && (
-                            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 text-sm">
-                                {errorPwd}
-                            </div>
-                        )}
-
-                        <form onSubmit={handleChangePassword} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Senha Atual <span className="text-red-500">*</span>
-                                </label>
-                                <div className="flex items-center bg-white border border-gray-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-[#006b64]/30 focus-within:border-[#006b64]">
-                                    <div className="bg-gray-50 p-3 border-r border-gray-200">
-                                        <Lock size={16} className="text-gray-400" />
-                                    </div>
-                                    <input
-                                        type="password"
-                                        name="senha_atual"
-                                        required
-                                        value={pwdData.senha_atual}
-                                        onChange={handlePwdChange}
-                                        className="flex-1 px-3 py-2 text-sm outline-none"
-                                        placeholder="••••••••"
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Nova Senha <span className="text-red-500">*</span>
-                                </label>
-                                <div className="flex items-center bg-white border border-gray-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-[#006b64]/30 focus-within:border-[#006b64]">
-                                    <div className="bg-gray-50 p-3 border-r border-gray-200">
-                                        <Lock size={16} className="text-gray-400" />
-                                    </div>
-                                    <input
-                                        type="password"
-                                        name="nova_senha"
-                                        required
-                                        value={pwdData.nova_senha}
-                                        onChange={handlePwdChange}
-                                        className="flex-1 px-3 py-2 text-sm outline-none"
-                                        placeholder="••••••••"
-                                    />
-                                </div>
-                            </div>
-
-                            <Button
-                                type="submit"
-                                disabled={loadingPwd}
-                                className="w-full bg-[#006b64] hover:bg-[#00524d] mt-2"
-                            >
-                                {loadingPwd ? "Alterando..." : "Alterar Senha"}
-                            </Button>
-                        </form>
-                    </div>
+            {/* Aba 1 — Meu Perfil */}
+            {activeTab === "perfil" && (
+                <div
+                    className="grid gap-[14px]"
+                    style={{ gridTemplateColumns: "1fr 1fr" }}
+                >
+                    <MeusDadosCard
+                        currentUser={currentUser}
+                        loading={loadingUser}
+                        error={errorUser}
+                    />
+                    <AlterarSenhaCard
+                        onSuccess={(msg) => showToast(msg, "success")}
+                    />
                 </div>
+            )}
 
-                {/* Coluna 2: Cadastro de Novo Admin */}
-                <div className="flex flex-col gap-8">
-
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                        <div className="flex items-center gap-3 border-b border-gray-100 pb-4 mb-6">
-                            <div className="bg-[#006b64]/10 p-3 rounded-full text-[#006b64]">
-                                <UserPlus size={24} />
-                            </div>
-                            <div>
-                                <h2 className="text-xl font-bold text-gray-800">Novo Administrador</h2>
-                                <p className="text-sm text-gray-500">Cadastre outro professor</p>
-                            </div>
-                        </div>
-
-                        {successForm && (
-                            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg mb-6 text-sm flex items-center gap-2">
-                                <ShieldCheck size={18} />
-                                {successForm}
-                            </div>
-                        )}
-
-                        {errorForm && (
-                            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 text-sm">
-                                {errorForm}
-                            </div>
-                        )}
-
-                        <form onSubmit={handleRegisterAdmin} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Nome de Usuário <span className="text-red-500">*</span>
-                                </label>
-                                <div className="flex items-center bg-white border border-gray-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-[#006b64]/30 focus-within:border-[#006b64]">
-                                    <div className="bg-gray-50 p-3 border-r border-gray-200">
-                                        <User size={16} className="text-gray-400" />
-                                    </div>
-                                    <input
-                                        type="text"
-                                        name="username"
-                                        required
-                                        value={newAdmin.username}
-                                        onChange={handleInputChange}
-                                        className="flex-1 px-3 py-2 text-sm outline-none"
-                                        placeholder="ex: prof.joao"
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    E-mail <span className="text-red-500">*</span>
-                                </label>
-                                <div className="flex items-center bg-white border border-gray-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-[#006b64]/30 focus-within:border-[#006b64]">
-                                    <div className="bg-gray-50 p-3 border-r border-gray-200">
-                                        <Mail size={16} className="text-gray-400" />
-                                    </div>
-                                    <input
-                                        type="email"
-                                        name="email"
-                                        required
-                                        value={newAdmin.email}
-                                        onChange={handleInputChange}
-                                        className="flex-1 px-3 py-2 text-sm outline-none"
-                                        placeholder="ex: joao@unifeso.edu.br"
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Senha <span className="text-red-500">*</span>
-                                </label>
-                                <div className="flex items-center bg-white border border-gray-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-[#006b64]/30 focus-within:border-[#006b64]">
-                                    <div className="bg-gray-50 p-3 border-r border-gray-200">
-                                        <Lock size={16} className="text-gray-400" />
-                                    </div>
-                                    <input
-                                        type="password"
-                                        name="password"
-                                        required
-                                        value={newAdmin.password}
-                                        onChange={handleInputChange}
-                                        className="flex-1 px-3 py-2 text-sm outline-none"
-                                        placeholder="••••••••"
-                                    />
-                                </div>
-                            </div>
-
-                            <Button
-                                type="submit"
-                                disabled={loadingForm}
-                                className="w-full bg-[#006b64] hover:bg-[#00524d] mt-2"
-                            >
-                                {loadingForm ? "Cadastrando..." : "Cadastrar Administrador"}
-                            </Button>
-                        </form>
-                    </div>
+            {/* Aba 2 — Professores */}
+            {activeTab === "professores" && (
+                <div
+                    className="grid gap-[14px]"
+                    style={{ gridTemplateColumns: "1fr 1fr" }}
+                >
+                    <ProfessoresListCard
+                        professores={professores}
+                        loading={loadingProfs}
+                        currentUserId={currentUser?.id ?? null}
+                        onRemove={handleProfRemoved}
+                        onError={(msg) => showToast(msg, "error")}
+                    />
+                    <NovoProfessorCard
+                        onSuccess={(msg) => showToast(msg, "success")}
+                        onCreated={handleProfCreated}
+                    />
                 </div>
-
-            </main>
+            )}
         </section>
     )
 }
