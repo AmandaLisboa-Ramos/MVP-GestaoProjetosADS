@@ -21,7 +21,7 @@ export const AuthProvider = ({ children }) => {
             localStorage.setItem('logged_username', username);
 
             setIsAuthenticated(true);
-            navigate('/grupos');
+            navigate('/dashboard');
         } catch (error) {
             console.error("Login failed", error);
             throw error;

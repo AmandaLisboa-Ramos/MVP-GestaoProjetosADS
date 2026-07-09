@@ -12,7 +12,8 @@ import {
     AlertCircle,
     Loader2,
     GraduationCap,
-    PackageCheck
+    PackageCheck,
+    Award
 } from "lucide-react"
 import { Button } from "../components/ui/button"
 import * as XLSX from 'xlsx';
@@ -165,31 +166,133 @@ function Dashboard() {
         })).filter(d => d.value > 0)
     }, [gruposFiltrados])
 
-    const entregasPorGrupoData = useMemo(() => {
+    const rankingGruposNotaData = useMemo(() => {
         return gruposFiltrados
-            .map(g => ({
-                name: g.nome,
-                Entregas: entregasFiltradas.filter(e => e.grupo === g.id).length
-            }))
-            .filter(d => d.Entregas > 0)
-            .slice(0, 15)
-    }, [gruposFiltrados, entregasFiltradas])
+            .map(g => {
+                const notasValidas = (g.alunos || [])
+                    .map(a => parseFloat(a.nota))
+                    .filter(n => !isNaN(n) && n !== null);
+                const media = notasValidas.length > 0
+                    ? parseFloat((notasValidas.reduce((sum, val) => sum + val, 0) / notasValidas.length).toFixed(2))
+                    : 0;
+                return {
+                    name: g.nome,
+                    Media: media,
+                    alunosComNota: notasValidas.length,
+                    totalAlunos: (g.alunos || []).length
+                };
+            })
+            .filter(d => d.Media > 0)
+            .sort((a, b) => b.Media - a.Media)
+            .slice(0, 15);
+    }, [gruposFiltrados])
 
     const handleExportExcel = () => {
-        const dataToExport = gruposFiltrados.map(g => ({
-            "Grupo": g.nome,
-            "MVP": g.mvp,
-            "Periodo": g.periodo,
-            "Ano": g.ano || (g.data ? new Date(g.data).getFullYear() : ""),
-            "Status": g.status,
-            "Total Alunos": g.totalAlunos ?? g.total_alunos ?? "",
-            "GitHub": g.githubUrl || g.github_url || "",
-        }))
-        const worksheet = XLSX.utils.json_to_sheet(dataToExport)
-        const workbook = XLSX.utils.book_new()
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Grupos")
-        XLSX.writeFile(workbook, "Relatorio_Grupos_Dashboard.xlsx")
-    }
+        const alunosMap = new Map(alunos.map(a => [a.id, a]));
+        const notasAlunosData = [];
+        gruposFiltrados.forEach(g => {
+            const alunosDoGrupo = g.alunos || [];
+            alunosDoGrupo.forEach(alunoRef => {
+                const alunoCompleto = alunosMap.get(alunoRef.id);
+
+                const notaNum = alunoRef.nota !== null && alunoRef.nota !== undefined && alunoRef.nota !== ""
+                    ? parseFloat(alunoRef.nota)
+                    : null;
+
+                notasAlunosData.push({
+                    "Matrícula (RA)": alunoCompleto?.matricula || "N/A",
+                    "Nome do Aluno": alunoRef.nome || alunoCompleto?.nome || "N/A",
+                    "E-mail": alunoCompleto?.email || "N/A",
+                    "Celular/Telefone": alunoCompleto?.celular || "N/A",
+                    "Grupo": g.nome,
+                    "MVP": g.mvp || "N/A",
+                    "Projeto": g.projeto?.nome || "Sem projeto vinculado",
+                    "Nota": notaNum,
+                    "Status do Grupo": g.status || "N/A"
+                });
+            });
+        });
+
+        notasAlunosData.sort((a, b) => a["Nome do Aluno"].localeCompare(b["Nome do Aluno"]));
+
+        const resumoGruposData = gruposFiltrados.map(g => {
+            const alunosDoGrupo = g.alunos || [];
+
+            const notasValidas = alunosDoGrupo
+                .map(a => parseFloat(a.nota))
+                .filter(n => !isNaN(n) && n !== null);
+
+            const mediaGrupo = notasValidas.length > 0
+                ? parseFloat((notasValidas.reduce((sum, val) => sum + val, 0) / notasValidas.length).toFixed(2))
+                : null;
+
+            const nomesIntegrantes = alunosDoGrupo.map(a => a.nome).join(", ");
+
+            return {
+                "Grupo": g.nome,
+                "MVP": g.mvp || "N/A",
+                "Projeto": g.projeto?.nome || "Sem projeto vinculado",
+                "Ano": g.ano || (g.data ? new Date(g.data).getFullYear() : ""),
+                "Período": g.periodo || "N/A",
+                "Qtd Alunos": alunosDoGrupo.length,
+                "Média do Grupo": mediaGrupo,
+                "Integrantes": nomesIntegrantes || "Sem integrantes",
+                "GitHub": g.githubUrl || g.github_url || "Não informado"
+            };
+        });
+
+        const workbook = XLSX.utils.book_new();
+
+        const autoFitAndStyle = (worksheet, data) => {
+            if (!data || data.length === 0) return;
+
+            worksheet['!views'] = [{ showGridLines: true }];
+
+            const keys = Object.keys(data[0]);
+            worksheet['!cols'] = keys.map(key => {
+                let maxLen = key.toString().length;
+                data.forEach(row => {
+                    const val = row[key];
+                    if (val !== undefined && val !== null) {
+                        const len = val.toString().length;
+                        if (len > maxLen) maxLen = len;
+                    }
+                });
+                return { wch: Math.min(Math.max(maxLen + 3, 10), 60) };
+            });
+
+            const gradeColIndex = keys.indexOf("Nota");
+            const avgColIndex = keys.indexOf("Média do Grupo");
+            const decimalCols = new Set();
+            if (gradeColIndex !== -1) decimalCols.add(String.fromCharCode(65 + gradeColIndex));
+            if (avgColIndex !== -1) decimalCols.add(String.fromCharCode(65 + avgColIndex));
+
+            Object.keys(worksheet).forEach(cellKey => {
+                if (cellKey.startsWith('!')) return;
+                const colMatch = cellKey.match(/^[A-Z]+/);
+                if (colMatch) {
+                    const colLetter = colMatch[0];
+                    if (decimalCols.has(colLetter)) {
+                        const cell = worksheet[cellKey];
+                        if (cell && cell.t === 'n') {
+                            cell.z = '0.00';
+                        }
+                    }
+                }
+            });
+        };
+
+        const worksheetNotas = XLSX.utils.json_to_sheet(notasAlunosData);
+        autoFitAndStyle(worksheetNotas, notasAlunosData);
+
+        const worksheetGrupos = XLSX.utils.json_to_sheet(resumoGruposData);
+        autoFitAndStyle(worksheetGrupos, resumoGruposData);
+
+        XLSX.utils.book_append_sheet(workbook, worksheetNotas, "Notas dos Alunos");
+        XLSX.utils.book_append_sheet(workbook, worksheetGrupos, "Resumo dos Grupos");
+
+        XLSX.writeFile(workbook, "Relatorio_Academico_Projetos.xlsx");
+    };
 
     return (
         <section className="min-h-screen bg-gray-50 flex flex-col">
@@ -356,15 +459,15 @@ function Dashboard() {
                             </div>
                         </div>
 
-                        {entregasPorGrupoData.length > 0 && (
+                        {rankingGruposNotaData.length > 0 && (
                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                                 <h2 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
-                                    <PackageCheck size={20} className="text-[#006b64]" />
-                                    Entregas Registradas por Grupo
+                                    <Award size={20} className="text-[#006b64]" />
+                                    Ranking de Grupos por Média de Notas
                                 </h2>
                                 <div className="w-full h-[320px]">
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={entregasPorGrupoData} margin={{ top: 20, right: 30, left: 0, bottom: 40 }}>
+                                        <BarChart data={rankingGruposNotaData} margin={{ top: 20, right: 30, left: 0, bottom: 40 }}>
                                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
                                             <XAxis
                                                 dataKey="name"
@@ -376,12 +479,13 @@ function Dashboard() {
                                                 interval={0}
                                                 tick={{ fontSize: 11 }}
                                             />
-                                            <YAxis axisLine={false} tickLine={false} allowDecimals={false} />
+                                            <YAxis axisLine={false} tickLine={false} domain={[0, 'auto']} />
                                             <Tooltip
                                                 cursor={{ fill: '#f3f4f6' }}
                                                 contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                                formatter={(value) => [value, 'Média']}
                                             />
-                                            <Bar dataKey="Entregas" fill="#8b5cf6" radius={[6, 6, 0, 0]} maxBarSize={50} />
+                                            <Bar dataKey="Media" fill="#8b5cf6" radius={[6, 6, 0, 0]} maxBarSize={50} />
                                         </BarChart>
                                     </ResponsiveContainer>
                                 </div>
@@ -408,12 +512,17 @@ function Dashboard() {
                                                 <th className="pb-3 font-semibold">Periodo</th>
                                                 <th className="pb-3 font-semibold">Status</th>
                                                 <th className="pb-3 font-semibold text-right">Alunos</th>
-                                                <th className="pb-3 font-semibold text-right">Entregas</th>
+                                                <th className="pb-3 font-semibold text-right">Média</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-50">
                                             {gruposFiltrados.slice(0, 20).map(g => {
-                                                const nEntregas = entregasFiltradas.filter(e => e.grupo === g.id).length
+                                                const notasValidas = (g.alunos || [])
+                                                    .map(a => parseFloat(a.nota))
+                                                    .filter(n => !isNaN(n) && n !== null)
+                                                const media = notasValidas.length > 0
+                                                    ? (notasValidas.reduce((sum, val) => sum + val, 0) / notasValidas.length).toFixed(1)
+                                                    : '-'
                                                 return (
                                                     <tr key={g.id} className="hover:bg-gray-50 transition-colors">
                                                         <td className="py-3 font-medium text-gray-800">{g.nome}</td>
@@ -433,14 +542,14 @@ function Dashboard() {
                                                             <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${g.status === 'Concluído' || g.status === 'Concluido'
                                                                 ? 'bg-green-100 text-green-700'
                                                                 : 'bg-amber-100 text-amber-700'
-                                                            }`}>
+                                                                }`}>
                                                                 {g.status || '-'}
                                                             </span>
                                                         </td>
                                                         <td className="py-3 text-right text-gray-600">
                                                             {g.totalAlunos ?? g.total_alunos ?? '-'}
                                                         </td>
-                                                        <td className="py-3 text-right text-gray-600">{nEntregas}</td>
+                                                        <td className="py-3 text-right text-gray-600">{media}</td>
                                                     </tr>
                                                 )
                                             })}

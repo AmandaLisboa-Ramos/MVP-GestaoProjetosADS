@@ -1,8 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { ShieldCheck, User, Users } from "lucide-react"
 import api from "../services/api"
-
-// Componentes de perfil
 import MeusDadosCard from "../components/perfil/MeusDadosCard"
 import AlterarSenhaCard from "../components/perfil/AlterarSenhaCard"
 import ProfessoresListCard from "../components/perfil/ProfessoresListCard"
