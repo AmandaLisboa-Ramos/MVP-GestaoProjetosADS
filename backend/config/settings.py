@@ -10,7 +10,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Seguranca
 SECRET_KEY = os.environ.get('SECRET_KEY')
-DEBUG = True
+DEBUG = config('DEBUG', default=False, cast=bool)
 
 # URLs
 ROOT_URLCONF = 'config.urls'
@@ -169,7 +169,7 @@ SIMPLE_JWT = {
 
 # Internacionalizacao
 
-
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=lambda v: [s.strip() for s in v.split(',')])
 # LANGUAGE_CODE = 'en-us'
 
 # TIME_ZONE = 'UTC'
