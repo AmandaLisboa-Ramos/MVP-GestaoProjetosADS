@@ -1,7 +1,8 @@
 import os
 from dotenv import load_dotenv
 from datetime import timedelta
-
+import dj_database_url
+from decouple import config 
 load_dotenv()
 
 # Base
@@ -9,7 +10,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Seguranca
 SECRET_KEY = os.environ.get('SECRET_KEY')
-DEBUG = True
+DEBUG = config('DEBUG', default=False, cast=bool)
 
 # URLs
 ROOT_URLCONF = 'config.urls'
@@ -75,16 +76,23 @@ TEMPLATES = [
 ]
 
 # Banco de dados
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': os.getenv('DB_NAME'),
-        'USER': os.getenv('DB_USER'),
-        'PASSWORD': os.getenv('DB_PASSWORD'),
-        'HOST': os.getenv('DB_HOST', '127.0.0.1'),
-        'PORT': os.getenv('DB_PORT', '3306'),
+DATABASE_URL = config('DATABASE_URL', default=None)
+
+if DATABASE_URL:
+    DATABASES = {
+        'default': dj_database_url.parse(DATABASE_URL, conn_max_age=600)
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': config('DB_NAME', default='datagerenciamentomvp'),
+            'USER': config('DB_USER', default='root'),
+            'PASSWORD': config('DB_PASSWORD', default=''),
+            'HOST': config('DB_HOST', default='127.0.0.1'),
+            'PORT': config('DB_PORT', default='3306'),
+        }
+    }
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "Gerenciamento MVP API",
@@ -161,7 +169,7 @@ SIMPLE_JWT = {
 
 # Internacionalizacao
 
-
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=lambda v: [s.strip() for s in v.split(',')])
 # LANGUAGE_CODE = 'en-us'
 
 # TIME_ZONE = 'UTC'
