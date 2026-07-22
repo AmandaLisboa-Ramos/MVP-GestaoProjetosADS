@@ -25,6 +25,14 @@ class Grupo(models.Model):
         EM_ANDAMENTO = "Em andamento", "Em andamento"
         CONCLUIDO    = "Concluído",    "Concluído"
 
+    codigo = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        verbose_name="Código",
+        help_text="Código identificador do grupo (ex: FE-001)",
+    )
+
     nome = models.CharField(
         max_length=100,
         verbose_name="Nome",

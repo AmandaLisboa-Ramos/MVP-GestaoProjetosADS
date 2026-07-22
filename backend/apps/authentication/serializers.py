@@ -58,7 +58,7 @@ class UserReponseSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CustomUser
-        fields = ("id", "username", "email")
+        fields = ("id", "username", "email", "is_active")
         read_only_fields = fields
 
 
