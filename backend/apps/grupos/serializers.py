@@ -33,6 +33,7 @@ class GrupoSerializer(serializers.ModelSerializer):
         model  = Grupo
         fields = (
             "id",
+            "codigo",
             "nome",
             "data",
             "periodo",
@@ -85,6 +86,7 @@ class CriarGrupoSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Grupo
         fields = (
+            "codigo",
             "nome",
             "data",
             "periodo",
@@ -103,6 +105,7 @@ class AtualizarGrupoSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Grupo
         fields = (
+            "codigo",
             "nome",
             "data",
             "periodo",

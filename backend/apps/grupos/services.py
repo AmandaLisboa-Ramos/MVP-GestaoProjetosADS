@@ -64,7 +64,7 @@ class GrupoService:
                 {"alunos": "Não é possível deletar um grupo que possui alunos vinculados."}
             )
 
-        if grupo.projetos.filter(status="Ativo").exists():
+        if grupo.projeto and grupo.projeto.status == "Ativo":
             raise serializers.ValidationError(
                 {"projetos": "Não é possível deletar um grupo que possui projeto ativo."}
             )
